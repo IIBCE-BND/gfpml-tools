@@ -2,8 +2,15 @@ import click
 import matplotlib.pyplot as plt
 import multiprocessing
 import numpy as np
+import pandas as pd
 
+from itertools import chain
+
+from joblib import Parallel, delayed
 from scipy.stats import binom_test
+from tqdm import tqdm
+
+from parsers import parse_gtf, parse_obo, parse_annot
 
 
 def calculate_p_value(N, B, n, b):
@@ -23,74 +30,78 @@ def calculate_term_enrichment(N, B, n, b):
     return (float(b) / float(n)) / (float(B) / float(N))
 
 
-def calculate_windows_enrichment(terms, seq_len, target_set, p_value_treshold,
-                                 start, end):
-    """
-    Given a background set and target set it calculates the probability that
-    the target set have b or more genes associated with a GO term.
-    Those values that are not statistically significant are discarded.
-    """
-    N = seq_len
-    n = len(target_set)
-    window_enritchment = []
-    for term in terms:
-        B = len(term['genes'])
-        b = len([
-            g['gene_id'] for g in term['genes'] if g['gene_id'] in target_set])
-        p_value = calculate_p_value(N, B, n, b)
-        enrichment = 0
-        if p_value < p_value_treshold:
-            enrichment = calculate_term_enrichment(N, B, n, b)
-        window_enritchment.append((term['_id'], enrichment, p_value))
-    print('start: {}, end: {}'.format(start, end))
-    return window_enritchment
+def calculate_seq_lea(seq_genes, window_size, gos_genes, genes_gos, target):
+    seq_len = len(seq_genes)
+    seq_gene_names = seq_genes.sort_values('start').name.values
+
+    seq_gos_genes = {
+        go_id:  set(go_genes) & set(seq_gene_names) 
+        for go_id, go_genes in gos_genes.items() 
+    }
+
+    seq_lea = []
+    for pos, name in enumerate(seq_gene_names):
+        start = pos - min(pos, window_size)
+        end = pos + min(window_size, seq_len - pos)
+
+        window_genes = [g for g in seq_gene_names[start:end]]
+        window_gos = chain(*[genes_gos[g] for g in window_genes])
+
+        N = seq_len
+        n = len(window_genes)
+        e = []
+        for go_id in window_gos:
+            go_genes = set(seq_gos_genes[go_id]) 
+            if go_id == target and name in go_genes:
+                go_genes.remove(name)
+            B = len(go_genes)
+            b = len(go_genes & set(window_genes))
+            if B:
+                p_value = calculate_p_value(N, B, n, b)
+                go_e = calculate_term_enrichment(N, B, n, b)
+            else:
+                p_value = 0
+                go_e = 0
+            seq_lea.append((name, go_id, go_e, p_value))
+
+    return seq_lea
 
 
-def calculate_enrichment(terms, seq_len, chromosome_genes, window_size,
-                         p_value_treshold):
-    """
-    For each gene on the sequence calculate the enrichment for every GO term
-    of the window cenetered on the gene.
-    """
-    for idx, gene in enumerate(chromosome_genes):
-        start = idx - min(idx, window_size)
-        end = idx + min(window_size, len(chromosome_genes) - idx)
-        target = [g['_id'] for g in chromosome_genes[start:end]]
-        result = calculate_windows_enrichment(
-            terms, seq_len, target, p_value_treshold, start, end)
-        yield result
+@click.group()
+def cli():
+    pass
 
 
-def calculate_enrichment_parallel(terms, seq_len, chromosome_genes,
-                                  window_size, p_value_treshold):
-    """
-    For each gene on the sequence calculate the enrichment for every GO term
-    of the window cenetered on the gene.
-    """
-    pool = multiprocessing.Pool()
-    results = []
-    for idx, gene in enumerate(chromosome_genes):
-        start = idx - min(idx, window_size)
-        end = idx + min(window_size, len(chromosome_genes) - idx)
-        target = [g['_id'] for g in chromosome_genes[start:end]]
-        result = pool.apply_async(calculate_windows_enrichment,
-                                  args=(terms, seq_len, target,
-                                        p_value_treshold, start, end))
-        results.append(result)
-    pool.close()
-    pool.join()
-    return [r.get() for r in results]
+@cli.command()
+@click.option('--genome', 'genome_path')
+@click.option('--ontology', 'ontology_path')
+@click.option('--annotations', 'annotations_path')
+@click.option('--window', 'window_size', default=10)
+@click.option('--target', default=None)
+@click.option('--save-path')
+def calculate(genome_path, ontology_path, annotations_path, window_size, target, save_path):
+    click.echo('Loading genome: {}'.format(genome_path))
+    genome = parse_gtf(genome_path)
+    
+    click.echo('Loading ontology: {}'.format(ontology_path))
+    gos, go_alt_ids = parse_obo(ontology_path)
+    
+    click.echo('Loading annotations: {}'.format(annotations_path))
+    gos_genes, genes_gos = parse_annot(annotations_path, go_alt_ids)
+    
+    # Ingore genes without annotations.
+    genome = genome[genome.name.isin(genes_gos.keys())]
+
+    click.echo('Calculating genes local enrichment for {} genes'.format(len(genome)))
+    results = Parallel(n_jobs=-1, verbose=10)(
+        delayed(calculate_seq_lea)(seq_genes, window_size, gos_genes, genes_gos, target)
+        for _, seq_genes in genome.groupby('seqname')
+    )
+
+    if save_path:
+        lea = pd.DataFrame(chain(*results))
+        lea.to_csv(save_path, index=False)
 
 
-def plot_window_enrichment(term, background_len, windows_size, values):
-    """
-    Plots the genoma enrichment for a specific GO term.
-    """
-    fig, ax = plt.subplots()
-    ind = np.arange(0, background_len)
-    ax.bar(ind, values, 1, color='blue')
-    # ax.set_xticks(np.arange(0, background_len, background_len / 10))
-    ax  .set_title('{} - window: {}'.format(term, windows_size))
-    ax.set_xlabel('Sequence')
-    ax.set_ylabel('Enrichment')
-    plt.savefig('plots/{}-{}.png'.format(term, windows_size))
+if __name__ == '__main__':
+    cli()
