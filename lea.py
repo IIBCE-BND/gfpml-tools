@@ -123,7 +123,7 @@ def transform(path, threshold, save_path):
     X = lea.groupby('gene').apply(generate_input)
 
     if save_path:
-        X.pickle(save_path)
+        X.to_pickle(save_path)
 
 
 if __name__ == '__main__':
