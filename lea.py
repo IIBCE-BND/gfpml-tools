@@ -79,7 +79,7 @@ def cli():
 @click.option('--window', 'window_size', default=10)
 @click.option('--target', default=None)
 @click.option('--save-path')
-def calculate(genome_path, ontology_path, annotations_path, window_size, target, save_path):
+def generate(genome_path, ontology_path, annotations_path, window_size, target, save_path):
     click.echo('Loading genome: {}'.format(genome_path))
     genome = parse_gtf(genome_path)
     
@@ -99,8 +99,31 @@ def calculate(genome_path, ontology_path, annotations_path, window_size, target,
     )
 
     if save_path:
-        lea = pd.DataFrame(chain(*results))
+        lea = pd.DataFrame(
+            chain(*results),
+            columns=['gene', 'go', 'enrichment', 'p_value']
+        )
         lea.to_csv(save_path, index=False)
+
+
+@cli.command()
+@click.argument('path')
+@click.option('--threshold', default=.005)
+@click.option('--save-path')
+def transform(path, threshold, save_path):
+    lea = pd.read_csv(path)
+    go_idx_map = {go: idx for idx, go in enumerate(lea.go.sort_values().unique())}
+
+    def generate_input(gene_lea):
+        x = np.zeros(len(go_idx_map))
+        for _, row in gene_lea[gene_lea.p_value > threshold].iterrows():
+            x[go_idx_map[row.go]] = row.enrichment
+        return x
+
+    X = lea.groupby('gene').apply(generate_input)
+
+    if save_path:
+        X.pickle(save_path)
 
 
 if __name__ == '__main__':
