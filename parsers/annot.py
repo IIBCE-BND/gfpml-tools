@@ -23,7 +23,7 @@ def parse_annot(path, alt_ids):
                 if go_id in alt_ids:
                     go_id = alt_ids[go_id]
 
-                if evidence in EVIDENCE_BLACKLIST:
+                if evidence not in EVIDENCE_BLACKLIST:
                     add_to_map(gos_genes, go_id, gene_id)
                     add_to_map(genes_gos, gene_id, go_id)
 
