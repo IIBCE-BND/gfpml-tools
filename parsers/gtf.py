@@ -40,7 +40,7 @@ def parse_gtf(path):
         engine='c',
         low_memory=True,
         compression='infer',
-        skiprows=10
+        comment='#'
     )
 
     # Exclude rows that are not genes.
