@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 import re
 
@@ -37,14 +38,27 @@ def parse_gtf(path):
             'seqname', 'source', 'feature', 'start', 'end', 'score',
             'strand', 'frame', 'attributes'
         ],
+        # sometime a chromosome is loaded as 1(int) and sometime as '1'(str), ensure than start and end are integer and not strings
+        dtype={
+            'seqname':str, 'source':str, 'feature':str, 'start':int, 'end':int, 'score':str,
+            'strand':str, 'frame':str, 'attributes':str
+        },
         engine='c',
         low_memory=True,
         compression='infer',
         comment='#'
     )
 
+    ###############################################################
+    ## TODO: ignore mito, MT, GL456233.1 chromosomes
+    ###############################################################
+
     # Exclude rows that are not genes.
     df = df[df.feature.isin(FEATURE_GENE_VALUES)]
+
+    # this is to compute gene position in lea implementation
+    df['strand'] = df['strand'].replace({'+':1, '-':-1})
+    df['size'] = np.abs(df.end - df.start)
 
     if df.empty:
         raise Exception
