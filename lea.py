@@ -18,7 +18,7 @@ def calculate_p_value(N, B, n, b):
     Apply Binomial-test to calculate the p-value.
     """
     x = b
-    n = n
+    n = n # ???
     p = float(B) / N
     return binom_test(x, n, p, alternative='greater')
 
@@ -32,26 +32,31 @@ def calculate_term_enrichment(N, B, n, b):
 
 def calculate_seq_lea(seq_genes, window_size, gos_genes, genes_gos, target):
     seq_len = len(seq_genes)
-    seq_gene_names = seq_genes.sort_values('start').name.values
+    if 'name' in seq_genes.columns:
+        seq_gene_names = seq_genes.sort_values(['start', 'size'], ascending=True).name.values # correct order
+    elif 'id' in seq_genes.columns:
+        seq_gene_names = seq_genes.sort_values(['start', 'size'], ascending=True).id.values # correct order
+    else:
+        raise Exception
 
     seq_gos_genes = {
-        go_id:  set(go_genes) & set(seq_gene_names) 
-        for go_id, go_genes in gos_genes.items() 
+        go_id: set(go_genes) & set(seq_gene_names)
+        for go_id, go_genes in gos_genes.items()
     }
 
     seq_lea = []
     for pos, name in enumerate(seq_gene_names):
         start = pos - min(pos, window_size)
-        end = pos + min(window_size, seq_len - pos)
+        end = pos + min(window_size, seq_len - 1 - pos) # porque pos < seq_len
 
         window_genes = [g for g in seq_gene_names[start:end]]
-        window_gos = chain(*[genes_gos[g] for g in window_genes])
+        window_gos = set(chain(*[genes_gos[g] for g in window_genes])) # maybe some of this GO_id are repeated
 
         N = seq_len
         n = len(window_genes)
         e = []
         for go_id in window_gos:
-            go_genes = set(seq_gos_genes[go_id]) 
+            go_genes = set(seq_gos_genes[go_id])
             if go_id == target and name in go_genes:
                 go_genes.remove(name)
             B = len(go_genes)
@@ -82,15 +87,21 @@ def cli():
 def generate(genome_path, ontology_path, annotations_path, window_size, target, save_path):
     click.echo('Loading genome: {}'.format(genome_path))
     genome = parse_gtf(genome_path)
-    
+
     click.echo('Loading ontology: {}'.format(ontology_path))
     gos, go_alt_ids = parse_obo(ontology_path)
-    
+
     click.echo('Loading annotations: {}'.format(annotations_path))
     gos_genes, genes_gos = parse_annot(annotations_path, go_alt_ids)
-    
+
     # Ingore genes without annotations.
-    genome = genome[genome.name.isin(genes_gos.keys())]
+    # 'name' is not in genome.columns for scer
+    if 'name' in genome.columns:
+        genome = genome[genome.name.isin(genes_gos.keys())]
+    elif 'id' in genome.columns:
+        genome = genome[genome.id.isin(genes_gos.keys())]
+    else:
+        raise Exception
 
     click.echo('Calculating genes local enrichment for {} genes'.format(len(genome)))
     results = Parallel(n_jobs=-1, verbose=10)(
