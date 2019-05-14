@@ -33,9 +33,9 @@ def calculate_term_enrichment(N, B, n, b):
 def calculate_seq_lea(seq_genes, window_size, gos_genes, genes_gos, target):
     seq_len = len(seq_genes)
     if 'name' in seq_genes.columns:
-        seq_gene_names = seq_genes.sort_values(['start', 'size'], ascending=True).name.values # correct order
+        seq_gene_names = seq_genes.sort_values(['start', 'strand', 'size'], ascending=True).name.values # correct order
     elif 'id' in seq_genes.columns:
-        seq_gene_names = seq_genes.sort_values(['start', 'size'], ascending=True).id.values # correct order
+        seq_gene_names = seq_genes.sort_values(['start', 'strand', 'size'], ascending=True).id.values # correct order
     else:
         raise Exception
 
