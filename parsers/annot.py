@@ -28,8 +28,6 @@ def parse_annot(path, alt_ids):
         df['DB Object Symbol'] = df['DB Object Synonym (|Synonym)'].apply(get_name)
 
     df = df[['DB Object Symbol', 'GO ID']]
+    df.rename(columns={'DB Object Symbol': 'gene_id', 'GO ID': 'go_id'}, inplace=True)
 
-    gos_genes = dict((go_id, list(df_go['DB Object Symbol'])) for go_id, df_go in df.groupby(['GO ID']))
-    genes_gos = dict((gene_id, list(df_gene['GO ID'])) for gene_id, df_gene in df.groupby(['DB Object Symbol']))
-
-    return gos_genes, genes_gos
+    return df
