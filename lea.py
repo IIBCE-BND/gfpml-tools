@@ -32,12 +32,11 @@ def calculate_term_enrichment(N, B, n, b):
 
 def calculate_seq_lea(seq_genes, window_size, gos_genes, genes_gos, target):
     seq_len = len(seq_genes)
-    if 'name' in seq_genes.columns:
-        seq_gene_names = seq_genes.sort_values(['start', 'strand', 'size'], ascending=True).name.values # correct order
-    elif 'id' in seq_genes.columns:
-        seq_gene_names = seq_genes.sort_values(['start', 'strand', 'size'], ascending=True).id.values # correct order
-    else:
-        raise Exception
+    if 'name' in seq_genes.columns: gene_identifier = 'name'
+    elif 'id' in seq_genes.columns: gene_identifier = 'id'
+    else: raise Exception
+
+    seq_gene_names = seq_genes.sort_values(['start', 'strand', 'size'], ascending=True)[gene_identifier].values # correct order
 
     seq_gos_genes = {
         go_id: set(go_genes) & set(seq_gene_names)
@@ -79,29 +78,21 @@ def cli():
 
 @cli.command()
 @click.option('--genome', 'genome_path')
+@click.option('--centromeres', 'centromeres_path')
 @click.option('--ontology', 'ontology_path')
 @click.option('--annotations', 'annotations_path')
 @click.option('--window', 'window_size', default=10)
 @click.option('--target', default=None)
 @click.option('--save-path')
-def generate(genome_path, ontology_path, annotations_path, window_size, target, save_path):
+def generate(genome_path, centromeres_path, ontology_path, annotations_path, window_size, target, save_path):
     click.echo('Loading genome: {}'.format(genome_path))
-    genome = parse_gtf(genome_path)
+    genome = parse_gtf(genome_path, centromeres_path)
 
     click.echo('Loading ontology: {}'.format(ontology_path))
     gos, go_alt_ids = parse_obo(ontology_path)
 
     click.echo('Loading annotations: {}'.format(annotations_path))
     gos_genes, genes_gos = parse_annot(annotations_path, go_alt_ids)
-
-    # Ingore genes without annotations.
-    # 'name' is not in genome.columns for scer
-    if 'name' in genome.columns:
-        genome = genome[genome.name.isin(genes_gos.keys())]
-    elif 'id' in genome.columns:
-        genome = genome[genome.id.isin(genes_gos.keys())]
-    else:
-        raise Exception
 
     click.echo('Calculating genes local enrichment for {} genes'.format(len(genome)))
     results = Parallel(n_jobs=-1, verbose=10)(
