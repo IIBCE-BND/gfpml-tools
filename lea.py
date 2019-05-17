@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import multiprocessing
 import numpy as np
 import pandas as pd
+import os
 
 from itertools import chain
 
@@ -11,6 +12,8 @@ from scipy.stats import binom_test
 from tqdm import tqdm
 
 from parsers import parse_gtf, parse_obo, parse_annot
+
+from sklearn.model_selection import train_test_split
 
 
 def calculate_p_value(N, B, n, b):
@@ -23,52 +26,65 @@ def calculate_p_value(N, B, n, b):
     return binom_test(x, n, p, alternative='greater')
 
 
-def calculate_term_enrichment(N, B, n, b):
-    """
-    Calculate the GO term enrichment in a target set.
-    """
-    return (float(b) / float(n)) / (float(B) / float(N))
+def reshape_lea(gene_pos, window_size):
+    n = len(gene_pos)
+    w = window_size
+    ans = np.zeros((n, 2 * w + 1))
+    for i in range(2 * w + 1):
+        ans[max(w - i, 0):min(n + w - i, n),i] = gene_pos[max(i - w, 0):min(n, n + i - w)]
 
+    return ans
 
-def calculate_seq_lea(seq_genes, window_size, gos_genes, genes_gos, target):
-    seq_len = len(seq_genes)
+def calculate_enrichment(gene_pos, window_size):
+    w = window_size
+    windows_size = np.repeat(2 * window_size + 1, len(gene_pos))
+    windows_size[:window_size] = np.arange(window_size + 1, 2 * window_size + 1)
+    windows_size[-window_size:] = np.arange(2 * window_size, window_size, -1)
+
+    lea_array = (reshape_lea(gene_pos, window_size).sum(axis=1) / windows_size) / (gene_pos.mean())
+
+    return lea_array
+
+def calculate_seq_lea2(seq_genes, seq_annots, window_size, save_path, th=100):
     if 'name' in seq_genes.columns: gene_identifier = 'name'
     elif 'id' in seq_genes.columns: gene_identifier = 'id'
     else: raise Exception
 
-    seq_gene_names = seq_genes.sort_values(['start', 'strand', 'size'], ascending=True)[gene_identifier].values # correct order
+    chromosome = seq_genes.seqname.values[0]
 
-    seq_gos_genes = {
-        go_id: set(go_genes) & set(seq_gene_names)
-        for go_id, go_genes in gos_genes.items()
-    }
+    seg_genes = seq_genes.sort_values(['start', 'strand', 'size'], ascending=True) # correct order
+    seq_genes['pos'] = range(len(seq_genes))
+    seq_len = len(seq_genes)
 
-    seq_lea = []
-    for pos, name in enumerate(seq_gene_names):
-        start = pos - min(pos, window_size)
-        end = pos + min(window_size, seq_len - 1 - pos) # porque pos < seq_len
+    seq_lea = {}
+    for go_id, seq_annots_go in seq_annots.groupby('go_id'):
+        if len(seq_annots_go) < th:
+            continue
 
-        window_genes = [g for g in seq_gene_names[start:end]]
-        window_gos = set(chain(*[genes_gos[g] for g in window_genes])) # maybe some of this GO_id are repeated
+        seq_annots_go['pos'] = seq_annots_go['gene_id'].replace(seq_genes.set_index(gene_identifier)['pos'].to_dict())
 
-        N = seq_len
-        n = len(window_genes)
-        e = []
-        for go_id in window_gos:
-            go_genes = set(seq_gos_genes[go_id])
-            if go_id == target and name in go_genes:
-                go_genes.remove(name)
-            B = len(go_genes)
-            b = len(go_genes & set(window_genes))
-            if B:
-                p_value = calculate_p_value(N, B, n, b)
-                go_e = calculate_term_enrichment(N, B, n, b)
-            else:
-                p_value = 0
-                go_e = 0
-            seq_lea.append((name, go_id, go_e, p_value))
+        train_size = 0.8
+        X_train, X_test, pos_train, pos_test = train_test_split(seq_annots_go.gene_id.values, seq_annots_go.pos.values, train_size=train_size)
 
-    return seq_lea
+        train_data = {'pos':pos_train, 'gene_id':X_train}
+        train_df = pd.DataFrame(data=train_data)
+        test_data = {'pos':pos_test, 'gene_id':X_test}
+        test_df = pd.DataFrame(data=test_data)
+
+        if not os.path.exists('{}'.format(save_path)):
+            os.mkdir('{}'.format(save_path))
+        if not os.path.exists('{}/{}'.format(save_path, chromosome)):
+            os.mkdir('{}/{}'.format(save_path, chromosome))
+
+        train_df.to_csv('{}/{}/{}_train.csv'.format(save_path, chromosome, go_id), sep='\t', index=False)
+        test_df.to_csv('{}/{}/{}_test.csv'.format(save_path, chromosome, go_id), sep='\t', index=False)
+
+        mask_train = np.isin(range(seq_len), pos_train)
+        seq_lea[go_id] = calculate_enrichment(mask_train, window_size)
+
+    if len(seq_lea) > 0:
+        seq_lea = pd.DataFrame(data=seq_lea)
+        seq_lea.to_csv('{}/{}/seq_lea.csv'.format(save_path, chromosome), sep='\t', index=False)
 
 
 @click.group()
@@ -82,9 +98,8 @@ def cli():
 @click.option('--ontology', 'ontology_path')
 @click.option('--annotations', 'annotations_path')
 @click.option('--window', 'window_size', default=10)
-@click.option('--target', default=None)
 @click.option('--save-path')
-def generate(genome_path, centromeres_path, ontology_path, annotations_path, window_size, target, save_path):
+def generate(genome_path, centromeres_path, ontology_path, annotations_path, window_size, save_path):
     click.echo('Loading genome: {}'.format(genome_path))
     genome = parse_gtf(genome_path, centromeres_path)
 
@@ -92,20 +107,24 @@ def generate(genome_path, centromeres_path, ontology_path, annotations_path, win
     gos, go_alt_ids = parse_obo(ontology_path)
 
     click.echo('Loading annotations: {}'.format(annotations_path))
-    gos_genes, genes_gos = parse_annot(annotations_path, go_alt_ids)
+    annots = parse_annot(annotations_path, go_alt_ids)
+
+    # 'name' is not in genome.columns for scer, instead we must use 'id'
+    if 'name' in genome.columns: gene_identifier = 'name'
+    elif 'id' in genome.columns: gene_identifier = 'id'
+    else: raise Exception
+
+    def select_annots(seq_genes):
+        #  return annotations of genes in genes
+        return annots[annots['gene_id'].isin(seq_genes[gene_identifier].values)]
 
     click.echo('Calculating genes local enrichment for {} genes'.format(len(genome)))
-    results = Parallel(n_jobs=-1, verbose=10)(
-        delayed(calculate_seq_lea)(seq_genes, window_size, gos_genes, genes_gos, target)
+    # for _, seq_genes in genome.groupby('seqname'):
+    #     calculate_seq_lea2(seq_genes, select_annots(seq_genes), window_size, save_path)
+    Parallel(n_jobs=-1, verbose=10)(
+        delayed(calculate_seq_lea2)(seq_genes, select_annots(seq_genes), window_size, save_path)
         for _, seq_genes in genome.groupby('seqname')
     )
-
-    if save_path:
-        lea = pd.DataFrame(
-            chain(*results),
-            columns=['gene', 'go', 'enrichment', 'p_value']
-        )
-        lea.to_csv(save_path, index=False)
 
 
 @cli.command()
