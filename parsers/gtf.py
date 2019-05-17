@@ -74,6 +74,9 @@ def parse_gtf(path, centromere_path):
         inplace=True
     )
 
+    df = df[df['biotype'] == 'protein_coding']
+    df.drop(['attributes', 'biotype'], axis=1, inplace=True)
+
     return df
 
 
