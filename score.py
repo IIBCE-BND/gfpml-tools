@@ -102,7 +102,7 @@ def generate(genome_path, centromeres_path, ontology_path, annotations_path, sav
 
     click.echo('Calculating genes score input for {} genes'.format(len(genome)))
     Parallel(n_jobs=-1, verbose=10)(
-        delayed(calculate_score)(seq_genes, select_annots(seq_genes), save_path)
+        delayed(calculate_score2)(seq_genes, select_annots(seq_genes), save_path)
         for _, seq_genes in genome.groupby('seqname')
     )
 
