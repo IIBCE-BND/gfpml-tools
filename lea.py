@@ -12,6 +12,7 @@ from scipy.stats import binom_test
 from tqdm import tqdm
 
 from parsers import parse_gtf, parse_obo, parse_annot
+from parsers.annot import expand_annots
 
 from sklearn.model_selection import train_test_split
 
@@ -52,7 +53,7 @@ def calculate_seq_lea2(seq_genes, seq_annots, window_size, save_path, th=100):
 
     chromosome = seq_genes.seqname.values[0]
 
-    seg_genes = seq_genes.sort_values(['start', 'strand', 'size'], ascending=True) # correct order
+    seq_genes = seq_genes.sort_values(['start', 'strand', 'size'], ascending=True) # correct order
     seq_genes['pos'] = range(len(seq_genes))
     seq_len = len(seq_genes)
 
@@ -104,27 +105,35 @@ def generate(genome_path, centromeres_path, ontology_path, annotations_path, win
     genome = parse_gtf(genome_path, centromeres_path)
 
     click.echo('Loading ontology: {}'.format(ontology_path))
-    gos, go_alt_ids = parse_obo(ontology_path)
+    gos, go_alt_ids, ontology_graphs = parse_obo(ontology_path)
 
     click.echo('Loading annotations: {}'.format(annotations_path))
     annots = parse_annot(annotations_path, go_alt_ids)
+    print('ahora agreagr ontology')
+    annots['ontology'] = annots['go_id'].replace(gos)
+    print('termina agreagr ontology')
 
     # 'name' is not in genome.columns for scer, instead we must use 'id'
     if 'name' in genome.columns: gene_identifier = 'name'
     elif 'id' in genome.columns: gene_identifier = 'id'
     else: raise Exception
 
-    def select_annots(seq_genes):
+    def select_annots(annots, seq_genes):
         #  return annotations of genes in genes
         return annots[annots['gene_id'].isin(seq_genes[gene_identifier].values)]
 
     click.echo('Calculating genes local enrichment for {} genes'.format(len(genome)))
-    # for _, seq_genes in genome.groupby('seqname'):
-    #     calculate_seq_lea2(seq_genes, select_annots(seq_genes), window_size, save_path)
-    Parallel(n_jobs=-1, verbose=10)(
-        delayed(calculate_seq_lea2)(seq_genes, select_annots(seq_genes), window_size, save_path)
-        for _, seq_genes in genome.groupby('seqname')
-    )
+    for ontology, annots_ontology in annots.groupby('ontology'):
+        print(ontology)
+        ontology_graph = ontology_graphs[ontology]
+        print('expanding')
+        expanded_annots = expand_annots(annots_ontology, ontology, ontology_graph)
+        print('finished expanding')
+
+        Parallel(n_jobs=-1, verbose=10)(
+            delayed(calculate_seq_lea2)(seq_genes, select_annots(expanded_annots, seq_genes), window_size, save_path)
+            for _, seq_genes in genome.groupby('seqname')
+        )
 
 
 @cli.command()
