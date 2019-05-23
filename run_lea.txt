@@ -1,6 +1,6 @@
 python lea.py generate \
     --genome datasets/gtf/Saccharomyces_cerevisiae.R64-1-1.94.gtf \
-    --centromeres datasets/centromere/scer-centromere.csv \
+    --centromeres datasets/centromeres/scer-centromere.csv \
     --ontology datasets/obo/go-basic.obo \
     --annotations datasets/gaf/sgd.gaf  \
     --save-path scer
@@ -19,7 +19,7 @@ python lea.py generate \
 
 python lea.py generate \
     --genome datasets/gtf/Homo_sapiens.GRCh38.94.gtf \
-    --centromeres datasets/centromere/hg-centromere.csv \
+    --centromeres datasets/centromeres/hg-centromere.csv \
     --ontology datasets/obo/go-basic.obo \
     --annotations datasets/gaf/goa_human.gaf \
     --save-path hg

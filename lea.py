@@ -46,7 +46,7 @@ def calculate_enrichment(gene_pos, window_size):
 
     return lea_array
 
-def calculate_seq_lea2(seq_genes, seq_annots, window_size, save_path, th=100):
+def calculate_seq_lea2(seq_genes, seq_annots, ontology, window_size, save_path, th=100):
     if 'name' in seq_genes.columns: gene_identifier = 'name'
     elif 'id' in seq_genes.columns: gene_identifier = 'id'
     else: raise Exception
@@ -57,7 +57,7 @@ def calculate_seq_lea2(seq_genes, seq_annots, window_size, save_path, th=100):
     seq_genes['pos'] = range(len(seq_genes))
     seq_len = len(seq_genes)
 
-    seq_lea = {}
+    seq_lea_ontology = {}
     for go_id, seq_annots_go in seq_annots.groupby('go_id'):
         if len(seq_annots_go) < th:
             continue
@@ -81,11 +81,11 @@ def calculate_seq_lea2(seq_genes, seq_annots, window_size, save_path, th=100):
         test_df.to_csv('{}/{}/{}_test.csv'.format(save_path, chromosome, go_id), sep='\t', index=False)
 
         mask_train = np.isin(range(seq_len), pos_train)
-        seq_lea[go_id] = calculate_enrichment(mask_train, window_size)
+        seq_lea_ontology[go_id] = calculate_enrichment(mask_train, window_size)
 
-    if len(seq_lea) > 0:
-        seq_lea = pd.DataFrame(data=seq_lea)
-        seq_lea.to_csv('{}/{}/seq_lea.csv'.format(save_path, chromosome), sep='\t', index=False)
+    if len(seq_lea_ontology) > 0:
+        seq_lea_ontology = pd.DataFrame(data=seq_lea_ontology)
+        seq_lea_ontology.to_csv('{}/{}/seq_lea_{}.csv'.format(save_path, chromosome, ontology), sep='\t', index=False)
 
 
 @click.group()
@@ -105,13 +105,10 @@ def generate(genome_path, centromeres_path, ontology_path, annotations_path, win
     genome = parse_gtf(genome_path, centromeres_path)
 
     click.echo('Loading ontology: {}'.format(ontology_path))
-    gos, go_alt_ids, ontology_graphs = parse_obo(ontology_path)
+    gos, ontology_gos, go_alt_ids, ontology_graphs = parse_obo(ontology_path)
 
     click.echo('Loading annotations: {}'.format(annotations_path))
     annots = parse_annot(annotations_path, go_alt_ids)
-    print('ahora agreagr ontology')
-    annots['ontology'] = annots['go_id'].replace(gos)
-    print('termina agreagr ontology')
 
     # 'name' is not in genome.columns for scer, instead we must use 'id'
     if 'name' in genome.columns: gene_identifier = 'name'
@@ -123,15 +120,13 @@ def generate(genome_path, centromeres_path, ontology_path, annotations_path, win
         return annots[annots['gene_id'].isin(seq_genes[gene_identifier].values)]
 
     click.echo('Calculating genes local enrichment for {} genes'.format(len(genome)))
-    for ontology, annots_ontology in annots.groupby('ontology'):
-        print(ontology)
+    for ontology in ontology_gos:
+        annots_ontology = annots[annots['go_id'].isin(ontology_gos[ontology])]
         ontology_graph = ontology_graphs[ontology]
-        print('expanding')
-        expanded_annots = expand_annots(annots_ontology, ontology, ontology_graph)
-        print('finished expanding')
+        expanded_annots = expand_annots(annots_ontology, ontology_graph)
 
         Parallel(n_jobs=-1, verbose=10)(
-            delayed(calculate_seq_lea2)(seq_genes, select_annots(expanded_annots, seq_genes), window_size, save_path)
+            delayed(calculate_seq_lea2)(seq_genes, select_annots(expanded_annots, seq_genes), ontology, window_size, save_path)
             for _, seq_genes in genome.groupby('seqname')
         )
 

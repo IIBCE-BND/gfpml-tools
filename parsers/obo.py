@@ -6,6 +6,7 @@ RELATIONSHIP_TYPES = ['part_of', 'regulates', 'positively_regulates', 'negativel
 ANNOTATION_RE = '(?m)^id: GO:.*(?:\r?\n(?!\[(?:Typedef|Term)\]).*)*'
 
 ontology_graphs = {ontology: nx.DiGraph() for ontology in ONTOLOGIES}
+ontology_gos = {ontology:[] for ontology in ONTOLOGIES}
 
 def parse_obo(path):
     gos = {}  # Map between Go terms and their ontologies, it contains alternative GO ids.
@@ -22,6 +23,7 @@ def parse_obo(path):
             ontology = cols[cols.index('namespace:') + 1]
             go_id = cols[1]
             gos[go_id] = ontology
+            ontology_gos[ontology].append(go_id)
             ontology_graphs[ontology].add_node(go_id)
 
             go_alt_ids = [cols[idx + 1] for idx, x in enumerate(cols) if x == 'alt_id:']
@@ -32,4 +34,4 @@ def parse_obo(path):
             for related_GO in is_a:
                 ontology_graphs[ontology].add_edge(go_id, related_GO)
 
-    return gos, alt_ids, ontology_graphs
+    return gos, ontology_gos, alt_ids, ontology_graphs
