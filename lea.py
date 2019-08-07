@@ -32,18 +32,22 @@ def reshape_lea(gene_pos, window_size):
     w = window_size
     ans = np.zeros((n, 2 * w + 1))
     for i in range(2 * w + 1):
-        ans[max(w - i, 0):min(n + w - i, n),i] = gene_pos[max(i - w, 0):min(n, n + i - w)]
-
+        ans[min(n, max(w - i, 0)):max(0, min(n + w - i, n)),i] = gene_pos[min(n, max(i - w, 0)):max(0, min(n, n + i - w))]
     return ans
 
 def calculate_enrichment(gene_pos, window_size):
+    n = len(gene_pos)
     w = window_size
-    windows_size = np.repeat(2 * window_size + 1, len(gene_pos))
-    windows_size[:window_size] = np.arange(window_size + 1, 2 * window_size + 1)
-    windows_size[-window_size:] = np.arange(2 * window_size, window_size, -1)
+    if w < n - 1:
+        m = min(2 * w + 1, n)
+        h = m - (w + 1)
+        window_sizes = np.repeat(m, n)
+        window_sizes[:h] = np.arange(w + 1, m)
+        window_sizes[-h:] = np.arange(m - 1, w, -1)
+    else:
+        window_sizes = np.repeat(n, n)
 
-    lea_array = (reshape_lea(gene_pos, window_size).sum(axis=1) / windows_size) / (gene_pos.mean())
-
+    lea_array = (reshape_lea(gene_pos, window_size).sum(axis=1) / window_sizes) / (gene_pos.mean())
     return lea_array
 
 def calculate_seq_lea2(seq_genes, seq_annots, ontology, window_size, save_path, th=100):
