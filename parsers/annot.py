@@ -47,8 +47,12 @@ def expand_annots(annots, ontology_graph):
     expanded_annots = []
     for go_id, annots_go in annots.groupby('go_id'):
         ancestors = get_ancestors(go_id, ontology_graph)
-        for gene_id in annots_go.gene_id:
-            df = pd.DataFrame({'go_id':list(ancestors), 'gene_id':gene_id})
+        for _, row in annots_go.iterrows():
+            gene_id = row['gene_id']
+            pos = row['pos']
+            seqname = row['seqname']
+            df = pd.DataFrame({'go_id': list(ancestors), 'gene_id': gene_id, 'pos': pos, 'seqname': seqname})
             expanded_annots.append(df)
     expanded_annots = pd.concat(expanded_annots)
+    expanded_annots = expanded_annots.drop_duplicates()
     return expanded_annots
