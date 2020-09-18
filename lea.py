@@ -171,15 +171,16 @@ def generate(genome_path, centromeres_path, ontology_path, annotations_path, win
         ontology_graph = ontology_graphs[ontology]
         expanded_annots = expand_annots(annots_ontology, ontology_graph)
 
-        Parallel(n_jobs=-1, verbose=10)(
-            delayed(calculate_seq_lea)(seq_genes, select_annots(expanded_annots, seq_genes), ontology, window_size, save_path)
-            for _, seq_genes in genome.groupby('seqname')
-        )
-
         # Parallel(n_jobs=-1, verbose=10)(
-        #     delayed(calculate_seq_lea2)(seq_genes, select_annots(expanded_annots, seq_genes), ontology, window_size, save_path)
+        #     (seq_genes, window_size, gos_genes, genes_gos, target)
+        #     delayed(calculate_seq_lea)(seq_genes, select_annots(expanded_annots, seq_genes), ontology, window_size, save_path)
         #     for _, seq_genes in genome.groupby('seqname')
         # )
+
+        Parallel(n_jobs=-1, verbose=10)(
+            delayed(calculate_seq_lea2)(seq_genes, select_annots(expanded_annots, seq_genes), ontology, window_size, save_path)
+            for _, seq_genes in genome.groupby('seqname')
+        )
 
 @cli.command()
 @click.argument('path')
