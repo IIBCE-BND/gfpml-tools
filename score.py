@@ -28,6 +28,26 @@ def score_function(num_genes_in_chromosome, positions):
     return score
 
 
+def calculate_score(seq_genes, seq_annots, save_path, th=100):
+    if 'name' in seq_genes.columns: gene_identifier = 'name'
+    elif 'id' in seq_genes.columns: gene_identifier = 'id'
+    else: raise Exception
+
+    chromosome = seq_genes.seqname.values[0]
+
+    seg_genes = seq_genes.sort_values(['start', 'strand', 'size'], ascending=True)
+    seq_genes['pos'] = range(len(seq_genes))
+    seq_len = len(seq_genes)
+
+    seq_score = {}
+    for go_id, seq_annots_go in seq_annots.groupby('go_id'):
+        seq_annots_go['pos'] = seq_annots_go['gene_id'].replace(seq_genes.set_index(gene_identifier)['pos'].to_dict())
+        seq_score[go_id] = score_function(seq_len, seq_annots_go.pos.values)
+
+    seq_score = pd.DataFrame(data=seq_score)
+    seq_score.to_csv('{}/{}/seq_score.csv'.format(save_path, chromosome), sep='\t', index=False)
+
+
 def calculate_score2(seq_genes, seq_annots, save_path, th=100):
     if 'name' in seq_genes.columns: gene_identifier = 'name'
     elif 'id' in seq_genes.columns: gene_identifier = 'id'
@@ -102,10 +122,14 @@ def generate(genome_path, centromeres_path, ontology_path, annotations_path, sav
 
     click.echo('Calculating genes score input for {} genes'.format(len(genome)))
     Parallel(n_jobs=-1, verbose=10)(
-        delayed(calculate_score2)(seq_genes, select_annots(seq_genes), save_path)
+        delayed(calculate_score)(seq_genes, select_annots(seq_genes), save_path)
         for _, seq_genes in genome.groupby('seqname')
     )
 
+    # Parallel(n_jobs=-1, verbose=10)(
+    #     delayed(calculate_score2)(seq_genes, select_annots(seq_genes), save_path)
+    #     for _, seq_genes in genome.groupby('seqname')
+    # )
 
 if __name__ == '__main__':
     cli()
