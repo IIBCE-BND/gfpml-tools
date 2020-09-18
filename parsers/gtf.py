@@ -75,7 +75,12 @@ def parse_gtf(path, centromere_path):
     )
 
     df = df[df['biotype'] == 'protein_coding']
-    df.drop(['attributes', 'biotype'], axis=1, inplace=True)
+    df.drop(['attributes', 'biotype', 'source', 'feature'], axis=1, inplace=True)
+
+    df = df.sort_values(['seqname', 'start', 'strand', 'size'], ascending=True)
+
+    positions = [range(len(seq_genome)) for seqname, seq_genome in df.groupby('seqname')]
+    df['pos'] = np.concatenate(positions, axis=None)
 
     return df
 

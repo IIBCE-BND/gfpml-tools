@@ -31,3 +31,35 @@ def parse_annot(path, alt_ids):
     df.rename(columns={'DB Object Symbol': 'gene_id', 'GO ID': 'go_id'}, inplace=True)
 
     return df
+
+def get_ancestors(go_id, ontology_graph):
+    # return the set of ancestors of GO terms of go_id in ontology_graph
+    ans = set([go_id])
+    aux = set([go_id])
+    while len(aux) > 0:
+        for node in aux:
+            ans = ans.union(set(ontology_graph.successors(node)))
+            aux = aux.union(set(ontology_graph.successors(node)))
+            aux = aux - {node}
+    return ans
+
+def expand_annots(annots, ontology_graph):
+    expanded_annots = []
+    if 'pos' in annots.columns:
+        for go_id, annots_go in annots.groupby('go_id'):
+            ancestors = get_ancestors(go_id, ontology_graph)
+            for _, row in annots_go.iterrows():
+                gene_id = row['gene_id']
+                pos = row['pos']
+                seqname = row['seqname']
+                df = pd.DataFrame({'go_id': list(ancestors), 'gene_id': gene_id, 'pos': pos, 'seqname': seqname})
+                expanded_annots.append(df)
+    else:
+        for go_id, annots_go in annots.groupby('go_id'):
+            ancestors = get_ancestors(go_id, ontology_graph)
+            for gene_id in annots_go.gene_id.values:
+                df = pd.DataFrame({'go_id': list(ancestors), 'gene_id': gene_id})
+                expanded_annots.append(df)
+    expanded_annots = pd.concat(expanded_annots)
+    expanded_annots = expanded_annots.drop_duplicates()
+    return expanded_annots
