@@ -3,12 +3,13 @@ import numpy as np
 
 import re
 
-CHROMOSOMES = {'Caenorhabditis_elegans': ['I','II','III','IV','V','X'],
-               'Drosophila_melanogaster': ['2L','2R','3L','3R','4','X','Y'],
-               'Homo_sapiens': ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22','X','Y'],
-               'Mus_musculus': ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','X','Y'],
-               'Saccharomyces_cerevisiae': ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV','XV','XVI']
-               }
+CHROMOSOMES = {
+    'Caenorhabditis_elegans': ['I','II','III','IV','V','X'],
+    'Drosophila_melanogaster': ['2L','2R','3L','3R','4','X','Y'],
+    'Homo_sapiens': ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22','X','Y'],
+    'Mus_musculus': ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','X','Y'],
+    'Saccharomyces_cerevisiae': ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV','XV','XVI']
+}
 
 GTF_HEADER = [
     'seqname', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attributes'
@@ -27,8 +28,7 @@ COLUMNS = {
 }
 
 ATTRIBUTES_FIELDS = [
-    'gene_biotype', 'biotype', 'gene_name', 'name', 'gene_id', 'id',
-    'gene_type'
+    'gene_biotype', 'biotype', 'gene_name', 'name', 'gene_id', 'id', 'gene_type'
 ]
 
 def parse_gtf(path, centromere_path):
@@ -86,6 +86,9 @@ def parse_gtf(path, centromere_path):
 
 
 def centromere_split(genome, organism_name, centromere_path):
+    '''
+    Split the chromosomes using the centromeres informations
+    '''
     if organism_name == 'Homo_sapiens':
         hg_centromeres_regions = pd.read_csv(centromere_path, delimiter='\t')
         for chromosome, chromosome_genes in genome.groupby('seqname'):

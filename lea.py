@@ -35,6 +35,7 @@ def reshape_lea(gene_pos, window_size):
         ans[min(n, max(w - i, 0)):max(0, min(n + w - i, n)),i] = gene_pos[min(n, max(i - w, 0)):max(0, min(n, n + i - w))]
     return ans
 
+
 def calculate_enrichment(gene_pos, window_size):
     n = len(gene_pos)
     w = window_size
@@ -99,7 +100,7 @@ def calculate_seq_lea2(seq_genes, seq_annots, ontology, window_size, save_path, 
 
     chromosome = seq_genes.seqname.values[0]
 
-    seq_genes = seq_genes.sort_values(['start', 'strand', 'size'], ascending=True) # correct order
+    seq_genes = seq_genes.sort_values(['start', 'strand', 'size'], ascending=True)
     seq_genes['pos'] = range(len(seq_genes))
     seq_len = len(seq_genes)
 
@@ -113,10 +114,8 @@ def calculate_seq_lea2(seq_genes, seq_annots, ontology, window_size, save_path, 
         train_size = 0.8
         X_train, X_test, pos_train, pos_test = train_test_split(seq_annots_go.gene_id.values, seq_annots_go.pos.values, train_size=train_size)
 
-        train_data = {'pos':pos_train, 'gene_id':X_train}
-        train_df = pd.DataFrame(data=train_data)
-        test_data = {'pos':pos_test, 'gene_id':X_test}
-        test_df = pd.DataFrame(data=test_data)
+        train_df = pd.DataFrame(data={'pos':pos_train, 'gene_id':X_train})
+        test_df = pd.DataFrame(data={'pos':pos_test, 'gene_id':X_test})
 
         if not os.path.exists('{}'.format(save_path)):
             os.mkdir('{}'.format(save_path))

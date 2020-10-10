@@ -5,10 +5,17 @@ ONTOLOGIES = ['molecular_function', 'biological_process', 'cellular_component']
 RELATIONSHIP_TYPES = ['part_of', 'regulates', 'positively_regulates', 'negatively_regulates']
 ANNOTATION_RE = '(?m)^id: GO:.*(?:\r?\n(?!\[(?:Typedef|Term)\]).*)*'
 
-ontology_graphs = {ontology: nx.DiGraph() for ontology in ONTOLOGIES}
-ontology_gos = {ontology:[] for ontology in ONTOLOGIES}
-
 def parse_obo(path):
+    '''
+    Given the path to the obo file returns:
+        gos: dictionary whose keys are GO terms and their values the corresponding ontology
+        ontology_gos: dictionary whose keys are the ontologies and their values are the list of GO terms of these ontology
+        alt_ids: dictionary whose keys are obsoletes GO terms and their values are the replacement terms
+        ontology_graphs: dictionary whose keys are the ontologies and their values the corresponding ontology graph
+    '''
+    ontology_graphs = {ontology: nx.DiGraph() for ontology in ONTOLOGIES}
+    ontology_gos = {ontology:[] for ontology in ONTOLOGIES}
+
     gos = {}  # Map between Go terms and their ontologies, it contains alternative GO ids.
     alt_ids = {}  # Dictionary to keep track of alternative ontologies ids.
 

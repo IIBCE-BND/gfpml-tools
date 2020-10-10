@@ -6,6 +6,10 @@ COLUMNS_NAMES = ['DB', 'DB Object ID', 'DB Object Symbol', 'Qualifier', 'GO ID',
 get_name = lambda attr: attr.split('|')[0]
 
 def parse_annot(path, alt_ids):
+    '''
+    Given the path to the annotations file and alt_ids a dictionary whose keys are obsoletes GO terms and their values
+    are the replacement terms returns a dataframe with all annotations
+    '''
     df = pd.read_csv(
         path,
         delimiter='\t',
@@ -44,6 +48,7 @@ def get_ancestors(go_id, ontology_graph):
     return ans
 
 def expand_annots(annots, ontology_graph):
+    # Given a set of annotations and the ontology graph return the hierarchical annotations
     expanded_annots = []
     if 'pos' in annots.columns:
         for go_id, annots_go in annots.groupby('go_id'):
