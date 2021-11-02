@@ -14,7 +14,7 @@ def parse_annot(path, alt_ids):
         path,
         delimiter='\t',
         names=COLUMNS_NAMES,
-        usecols=['DB', 'DB Object Symbol', 'GO ID', 'Evidence Code', 'DB Object Synonym (|Synonym)'],
+        usecols=['DB', 'DB Object Symbol', 'Qualifier', 'GO ID', 'Evidence Code', 'DB Object Synonym (|Synonym)'],
         engine='c',
         low_memory=True,
         compression='infer',
@@ -31,6 +31,7 @@ def parse_annot(path, alt_ids):
     if df.at[0, 'DB'] == 'SGD':
         df['DB Object Symbol'] = df['DB Object Synonym (|Synonym)'].apply(get_name)
 
+    df = df[~df.Qualifier.str.contains('NOT', na=False)]
     df = df[['DB Object Symbol', 'GO ID']]
     df.rename(columns={'DB Object Symbol': 'gene_id', 'GO ID': 'go_id'}, inplace=True)
 
